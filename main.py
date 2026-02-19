@@ -23,58 +23,64 @@ def pick_area(areas: list, name: str) -> dict:
             return a
     raise ValueError(f"指定した地域名 '{name}' が見つかりませんでした。")
 
-def weather_to_emoji(weather_text: str) -> str:
+def weather_to_emoji(main_weather: str) -> str:
     """
-    気象庁の天気文から絵文字を決める（改善版）
-    - 「所により」「一時」「時々」などの注意書きの雨/雪では、メインを優先する
-    - 優先度: 雷 > 雪(メイン) > 雨(メイン) > 晴 > くもり > その他
+    メイン天気（晴れ/くもり/雨/雪）から絵文字を決める
     """
-    t = weather_text.replace("　", " ").strip()
-
-    # まず雷は最優先
-    if "雷" in t:
-        return "⛈️"
-
-    # 「所により」「一時」「時々」などは “注意書き” になりやすい
-    caution_words = ["所により", "一時", "時々", "未明", "明け方", "夜", "夕方", "昼前", "昼過ぎ", "夜遅く"]
-
-    has_rain = "雨" in t
-    has_snow = "雪" in t
-    has_sun = "晴" in t
-    has_cloud = ("くもり" in t) or ("曇" in t)
-
-    # 先頭（メイン）が何かをざっくり見る：最初の語（空白区切り）を使う
-    first_token = t.split(" ")[0] if t else ""
-
-    # 雪/雨がメインかどうか（先頭が 雨/雪、または「雨」だけの短文など）
-    snow_main = first_token.startswith("雪")
-    rain_main = first_token.startswith("雨")
-
-    # 注意書きっぽい雨/雪（例: "くもり ... 所により 未明 雨"）
-    rain_caution = has_rain and any(w in t for w in caution_words) and not rain_main
-    snow_caution = has_snow and any(w in t for w in caution_words) and not snow_main
-
-    # メインが雪/雨ならそれを優先
-    if has_snow and not snow_caution and snow_main:
-        return "❄️"
-    if has_rain and not rain_caution and rain_main:
-        return "🌧️"
-
-    # 「晴 + 雨(注意書き)」は “にわか雨” っぽく 🌦️
-    if has_sun and has_rain:
-        return "🌦️"
-
-    # 「くもり + 雨(注意書き)」は “くもり時々雨/にわか雨” っぽく 🌦️
-    if has_cloud and has_rain:
-        # 注意書きの雨なら、くもり優先で 🌦️（傘というより “変わりやすい”）
-        return "🌦️"
-
-    if has_sun:
+    if "晴れ" in main_weather:
         return "☀️"
-    if has_cloud:
+    if "くもり" in main_weather:
         return "☁️"
+    if "雨" in main_weather:
+        return "🌧️"
+    if "雪" in main_weather:
+        return "❄️"
     return "🌤️"
-    
+
+def normalize_weather_text(raw: str) -> str:
+    """
+    気象庁の天気文を「〇〇のち〇〇」形式へ寄せる（シンプル版）
+    例:
+      'くもり 昼前から晴れ 所により 朝まで 雨' → 'くもりのち晴れ'
+      '晴れ 夕方から くもり' → '晴れのちくもり'
+      '雨' → '雨'
+    ルール:
+      - 文中に出てくる天気語（晴れ/くもり/雨/雪）を出現順に拾う
+      - 最初をメイン、次に出た別の天気を「のち」として採用
+      - 3つ以上出ても「最初の2つ」だけにする（読みやすさ優先）
+    """
+    t = raw.replace("　", " ").strip()
+
+    # 天気語の表記ゆれを吸収（曇→くもり）
+    t = t.replace("曇り", "くもり").replace("曇", "くもり")
+
+    keywords = ["晴れ", "くもり", "雨", "雪"]
+    found = []
+
+    # 出現順に拾う
+    for k in keywords:
+        pass  # 位置で拾うため後でまとめて処理
+
+    positions = []
+    for k in keywords:
+        idx = t.find(k)
+        if idx != -1:
+            positions.append((idx, k))
+    positions.sort()
+
+    for _, k in positions:
+        if not found or found[-1] != k:
+            found.append(k)
+
+    if not found:
+        return raw.strip()
+
+    # 最初の2つだけに絞る
+    if len(found) == 1:
+        return found[0]
+    else:
+        return f"{found[0]}のち{found[1]}"
+        
 def build_message(jma_json: list) -> str:
     data0 = jma_json[0]
     publishing_office = data0.get("publishingOffice", "気象庁")
@@ -84,6 +90,9 @@ def build_message(jma_json: list) -> str:
     ts_weather = data0["timeSeries"][0]
     area_weather = pick_area(ts_weather["areas"], TARGET_FORECAST_AREA_NAME)
     today_weather_text = area_weather["weathers"][0]
+    simple_weather = normalize_weather_text(today_weather_text)
+    main_weather = simple_weather.split("のち")[0]  # メイン（のち形式でなくてもOK）
+    emoji = weather_to_emoji(main_weather)
 
     # 降水確率（複数値）→ 今日分の最大値を表示
     ts_pop = data0["timeSeries"][1]
@@ -110,9 +119,6 @@ def build_message(jma_json: list) -> str:
         dow = date_str.split("(")[-1].split(")")[0]
         date_str = date_str.replace(dow, dow_map.get(dow, dow))
 
-    # 天気絵文字
-    emoji = weather_to_emoji(today_weather_text)
-
     # reportDatetime を短く見せる（例: 2026-02-20T05:00:00+09:00 → 05:00）
     report_time = ""
     try:
@@ -122,19 +128,17 @@ def build_message(jma_json: list) -> str:
 
     lines = []
     lines.append(f"{emoji} 福岡市 {date_str}")
-    lines.append(f"📌 {today_weather_text}")
+    lines.append(f"天気：{simple_weather}")
 
-    # 空行を入れて見やすくする
-    lines.append("")
+    lines.append("")  # 空行
 
     if temp_min is not None and temp_max is not None:
-        lines.append(f"🌡 気温：{temp_min}℃ / {temp_max}℃")
+        lines.append(f"気温：{temp_min}℃ / {temp_max}℃")
     if pop_max is not None:
-        lines.append(f"☔ 降水：最大 {pop_max}%（今日）")
+        lines.append(f"降水：最大 {pop_max}%（今日）")
 
-    # もう1行空ける
-    lines.append("")
-    lines.append(f"🕒 発表：{report_time}（{publishing_office}）")
+    lines.append("")  # 空行
+    lines.append(f"発表：{report_time}（{publishing_office}）")
 
     return "\n".join(lines)
 
