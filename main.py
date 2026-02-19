@@ -23,39 +23,79 @@ def pick_area(areas: list, name: str) -> dict:
             return a
     raise ValueError(f"指定した地域名 '{name}' が見つかりませんでした。")
 
+def weather_to_emoji(weather_text: str) -> str:
+    """
+    気象庁の天気文（例: 'くもり 時々 晴れ'）から絵文字をざっくり決める
+    優先度: 雷 > 雪 > 雨 > 晴 > くもり > その他
+    """
+    t = weather_text.replace("　", " ").strip()
+
+    if "雷" in t:
+        return "⛈️"
+    if "雪" in t:
+        return "❄️"
+    if "雨" in t:
+        # 雨＋晴れ/くもり混在なら傘を優先
+        return "🌧️"
+    if "晴" in t:
+        return "☀️"
+    if "くもり" in t or "曇" in t:
+        return "☁️"
+    return "🌤️"
+    
 def build_message(jma_json: list) -> str:
     data0 = jma_json[0]
     publishing_office = data0.get("publishingOffice", "気象庁")
     report_dt = data0.get("reportDatetime", "")
 
+    # 今日の天気（文章）
     ts_weather = data0["timeSeries"][0]
     area_weather = pick_area(ts_weather["areas"], TARGET_FORECAST_AREA_NAME)
     today_weather_text = area_weather["weathers"][0]
 
+    # 降水確率（複数値）→ 今日分の最大値を表示
     ts_pop = data0["timeSeries"][1]
     area_pop = pick_area(ts_pop["areas"], TARGET_FORECAST_AREA_NAME)
     pops = area_pop.get("pops", [])
-    pop_vals = [int(p) for p in pops if p.isdigit()]
+    pop_vals = [int(p) for p in pops if isinstance(p, str) and p.isdigit()]
     pop_max = max(pop_vals) if pop_vals else None
 
+    # 気温（temps: 最低/最高が入ることが多い）
     ts_temp = data0["timeSeries"][2]
     area_temp = pick_area(ts_temp["areas"], TARGET_TEMP_AREA_NAME)
     temps = area_temp.get("temps", [])
     temp_min = temps[0] if len(temps) >= 1 else None
     temp_max = temps[1] if len(temps) >= 2 else None
 
-    today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
+    # 今日の日付（JSTで固定）
+    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
+    date_str = now_jst.strftime("%-m/%-d(%a)")  # 例: 2/20(Thu) ※Windows互換が心配なら下に置換案あり
+
+    # 英語の曜日を日本語に変換（簡易）
+    dow_map = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木", "Fri": "金", "Sat": "土", "Sun": "日"}
+    # %a が英語になる環境用に置換
+    if "(" in date_str and ")" in date_str:
+        dow = date_str.split("(")[-1].split(")")[0]
+        date_str = date_str.replace(dow, dow_map.get(dow, dow))
+
+    # 天気絵文字
+    emoji = weather_to_emoji(today_weather_text)
+
+    # reportDatetime を短く見せる（例: 2026-02-20T05:00:00+09:00 → 05:00）
+    report_time = ""
+    try:
+        report_time = report_dt.split("T")[1][:5]
+    except Exception:
+        report_time = report_dt
 
     lines = []
-    lines.append(f"【福岡市（福岡地方）の天気】{today}")
-    lines.append(f"天気：{today_weather_text}")
+    lines.append(f"{emoji} 福岡市 {date_str}  {today_weather_text}")
     if temp_min is not None and temp_max is not None:
-        lines.append(f"気温：{temp_min}℃ / {temp_max}℃")
+        lines.append(f"🌡 {temp_min}℃ / {temp_max}℃")
     if pop_max is not None:
-        lines.append(f"降水確率：最大 {pop_max}%（今日）")
-    lines.append("")
-    lines.append(f"発表：{publishing_office}")
-    lines.append(f"時刻：{report_dt}")
+        lines.append(f"☔ 降水 最大{pop_max}%")
+    lines.append(f"🕒 発表 {report_time}（{publishing_office}）")
+
     return "\n".join(lines)
 
 def send_line_to_group(message: str):
