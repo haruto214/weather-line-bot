@@ -1,26 +1,32 @@
-name: Daily Weather to LINE
+name: Daily Weather to LINE (Group)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 22 * * *"  # JST 7:30
+    - cron: "30 22 * * *"  # UTC 22:30 = JST 7:30
 
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
         run: |
-          pip install requests line-bot-sdk
+          pip install requests
 
       - name: Run main.py
-        run: python main.py
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          LINE_GROUP_ID: ${{ secrets.LINE_GROUP_ID }}
+          # 福岡市（福岡地方）向け：必要なら変更可
+          JMA_OFFICE_CODE: "400000"
+          TARGET_FORECAST_AREA_NAME: "福岡地方"
+          TARGET_TEMP_AREA_NAME: "福岡"
+        run: python main.py
