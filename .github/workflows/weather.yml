@@ -3,7 +3,7 @@ name: Daily Weather to LINE
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 22 * * *"  # UTC 22:30 = JST 7:30
+    - cron: "30 22 * * *"  # JST 7:30
 
 jobs:
   run:
@@ -21,3 +21,6 @@ jobs:
 
       - name: Run main.py
         run: python main.py
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
