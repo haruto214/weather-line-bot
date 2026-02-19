@@ -1,6 +1,7 @@
 import os
 import requests
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 # ====== 設定（環境変数で上書き可能）======
 JMA_OFFICE_CODE = os.getenv("JMA_OFFICE_CODE", "400000")  # 福岡県
@@ -43,7 +44,7 @@ def build_message(jma_json: list) -> str:
     temp_min = temps[0] if len(temps) >= 1 else None
     temp_max = temps[1] if len(temps) >= 2 else None
 
-    today = datetime.now().strftime("%Y/%m/%d")
+    today = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y/%m/%d")
 
     lines = []
     lines.append(f"【福岡市（福岡地方）の天気】{today}")
