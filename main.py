@@ -122,23 +122,25 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
     return buckets
 
 
-def format_buckets_line(buckets: dict[str, int | None]) -> tuple[str, int | None]:
+def format_buckets_block(buckets: dict[str, int | None]) -> tuple[str, int | None]:
     """
-    4区間を必ず並べて表示。
-    例: '00-06 --% / 06-12 20% / 12-18 10% / 18-24 0%'（最大20%）
+    先に最大%を表示し、そのあと4区間を改行で表示するブロックを作る。
     """
     order = ["00-06", "06-12", "12-18", "18-24"]
-    parts = []
-    vals = []
+
+    vals = [v for v in (buckets.get(k) for k in order) if isinstance(v, int)]
+    max_pop = max(vals) if vals else None
+
+    header = f"降水：最大{max_pop}%" if max_pop is not None else "降水：最大--%"
+    sep = "---------------"
+
+    lines = [header, sep]
     for k in order:
         v = buckets.get(k)
-        if v is None:
-            parts.append(f"{k} --%")
-        else:
-            parts.append(f"{k} {v}%")
-            vals.append(v)
-    max_pop = max(vals) if vals else None
-    return " / ".join(parts), max_pop
+        lines.append(f"{k} {v}%" if v is not None else f"{k} --%")
+    lines.append(sep)
+
+    return "\n".join(lines), max_pop
 
 
 def build_message(jma_json: list) -> str:
@@ -157,11 +159,10 @@ def build_message(jma_json: list) -> str:
     main_weather = simple_weather.split("のち")[0]
     emoji = weather_to_emoji(main_weather)
 
-    # 今日の降水（4区間固定で表示）
+    # 今日の降水（4区間固定でブロック表示）
     ts_pop = data0["timeSeries"][1]
     buckets = pops_fixed_buckets_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
-    pop_block, pop_max = format_buckets_line(buckets)
-    lines.append(pop_block)
+    pop_block, pop_max = format_buckets_block(buckets)
 
     # 気温
     ts_temp = data0["timeSeries"][2]
@@ -184,6 +185,7 @@ def build_message(jma_json: list) -> str:
     except Exception:
         report_time = report_dt
 
+    # ---- メッセージ組み立て（ここで初めて lines を作る）----
     lines = []
     lines.append(f"{emoji} 福岡市 {date_str}")
     lines.append(f"天気：{simple_weather}")
@@ -192,11 +194,8 @@ def build_message(jma_json: list) -> str:
     if temp_min is not None and temp_max is not None:
         lines.append(f"気温：{temp_min}℃ / {temp_max}℃")
 
-    # 今日の降水（必ず4区間）
-    if pop_max is None:
-        lines.append(f"降水：{pop_line}")
-    else:
-        lines.append(f"降水：{pop_line}（最大{pop_max}%）")
+    # ★希望形式の降水ブロック（改行込み）
+    lines.append(pop_block)
 
     lines.append("")
     lines.append(f"発表：{report_time}（{publishing_office}）")
