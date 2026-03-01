@@ -185,7 +185,7 @@ def build_message(jma_json: list) -> str:
     # 今日の降水（4区間固定でブロック表示）
     ts_pop = data0["timeSeries"][1]
     buckets = pops_fixed_buckets_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
-    pop_block, _ = format_buckets_block_filtered(buckets, now_jst, show_past=False)
+    pop_block, _ = format_buckets_block_filtered(buckets, show_past=False)
 
     # 気温
     ts_temp = data0["timeSeries"][2]
