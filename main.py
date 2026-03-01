@@ -38,6 +38,19 @@ def weather_to_emoji(main_weather: str) -> str:
         return "❄️"
     return "🌤️"
 
+def weather_to_emoji_combo(simple_weather: str) -> str:
+    """
+    '晴れのちくもり' のような表現を ☀️/☁️ のように表示する
+    'のち' が無い場合は単体絵文字を返す
+    """
+    parts = [p.strip() for p in simple_weather.split("のち") if p.strip()]
+    emojis = [weather_to_emoji(p) for p in parts]
+    # 同じ絵文字が連続/重複したら1つにする（例: くもりのちくもり）
+    unique = []
+    for e in emojis:
+        if not unique or unique[-1] != e:
+            unique.append(e)
+    return "/".join(unique) if unique else "🌤️"
 
 def normalize_weather_text(raw: str) -> str:
     """
@@ -124,7 +137,6 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
 
 def format_buckets_block_filtered(
     buckets: dict[str, int | None],
-    now_jst: datetime,
     show_past: bool = False
 ) -> tuple[str, int | None]:
     """
@@ -168,13 +180,12 @@ def build_message(jma_json: list) -> str:
     area_weather = pick_area(ts_weather["areas"], TARGET_FORECAST_AREA_NAME)
     today_weather_text = area_weather["weathers"][0]
     simple_weather = normalize_weather_text(today_weather_text)
-    main_weather = simple_weather.split("のち")[0]
-    emoji = weather_to_emoji(main_weather)
+    emoji = weather_to_emoji_combo(simple_weather)
 
     # 今日の降水（4区間固定でブロック表示）
     ts_pop = data0["timeSeries"][1]
     buckets = pops_fixed_buckets_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
-    pop_block, pop_max = format_buckets_block_filtered(buckets, now_jst, show_past=False)
+    pop_block, _ = format_buckets_block_filtered(buckets, now_jst, show_past=False)
 
     # 気温
     ts_temp = data0["timeSeries"][2]
