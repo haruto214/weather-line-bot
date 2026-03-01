@@ -122,13 +122,25 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
     return buckets
 
 
-def format_buckets_block(buckets: dict[str, int | None]) -> tuple[str, int | None]:
+def format_buckets_block_filtered(
+    buckets: dict[str, int | None],
+    now_jst: datetime,
+    show_past: bool = False
+) -> tuple[str, int | None]:
     """
-    先に最大%を表示し、そのあと4区間を改行で表示するブロックを作る。
+    降水ブロックを作る（朝6:30想定で過去区間を出さない）
+    - show_past=False: 00-06を表示しない（6:30運用向け）
+    - show_past=True : 00-06も表示する（必要なら）
     """
-    order = ["00-06", "06-12", "12-18", "18-24"]
+    # 4区間の定義
+    all_order = ["00-06", "06-12", "12-18", "18-24"]
 
-    vals = [v for v in (buckets.get(k) for k in order) if isinstance(v, int)]
+    # 朝6:30運用：過去区間を出さない → 00-06は除外
+    # （将来、実行時刻が変わっても柔軟にしたいなら now_jst.hour で分岐可能）
+    order = all_order if show_past else ["06-12", "12-18", "18-24"]
+
+    # 最大値は「表示対象の区間」だけで計算
+    vals = [buckets.get(k) for k in order if isinstance(buckets.get(k), int)]
     max_pop = max(vals) if vals else None
 
     header = f"降水：最大{max_pop}%" if max_pop is not None else "降水：最大--%"
@@ -162,7 +174,7 @@ def build_message(jma_json: list) -> str:
     # 今日の降水（4区間固定でブロック表示）
     ts_pop = data0["timeSeries"][1]
     buckets = pops_fixed_buckets_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
-    pop_block, pop_max = format_buckets_block(buckets)
+    pop_block, pop_max = format_buckets_block_filtered(buckets, now_jst, show_past=False)
 
     # 気温
     ts_temp = data0["timeSeries"][2]
