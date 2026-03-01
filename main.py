@@ -9,7 +9,8 @@ TARGET_FORECAST_AREA_NAME = os.getenv("TARGET_FORECAST_AREA_NAME", "福岡地方
 TARGET_TEMP_AREA_NAME = os.getenv("TARGET_TEMP_AREA_NAME", "福岡")
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")  # ★追加（Cから始まるgroupId）
+LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")  # Cから始まるgroupId
+
 
 def fetch_jma_forecast(office_code: str) -> list:
     url = f"https://www.jma.go.jp/bosai/forecast/data/forecast/{office_code}.json"
@@ -17,16 +18,16 @@ def fetch_jma_forecast(office_code: str) -> list:
     r.raise_for_status()
     return r.json()
 
+
 def pick_area(areas: list, name: str) -> dict:
     for a in areas:
         if a.get("area", {}).get("name") == name:
             return a
     raise ValueError(f"指定した地域名 '{name}' が見つかりませんでした。")
 
+
 def weather_to_emoji(main_weather: str) -> str:
-    """
-    メイン天気（晴れ/くもり/雨/雪）から絵文字を決める
-    """
+    """メイン天気（晴れ/くもり/雨/雪）から絵文字を決める"""
     if "晴れ" in main_weather:
         return "☀️"
     if "くもり" in main_weather:
@@ -37,30 +38,15 @@ def weather_to_emoji(main_weather: str) -> str:
         return "❄️"
     return "🌤️"
 
+
 def normalize_weather_text(raw: str) -> str:
     """
     気象庁の天気文を「〇〇のち〇〇」形式へ寄せる（シンプル版）
-    例:
-      'くもり 昼前から晴れ 所により 朝まで 雨' → 'くもりのち晴れ'
-      '晴れ 夕方から くもり' → '晴れのちくもり'
-      '雨' → '雨'
-    ルール:
-      - 文中に出てくる天気語（晴れ/くもり/雨/雪）を出現順に拾う
-      - 最初をメイン、次に出た別の天気を「のち」として採用
-      - 3つ以上出ても「最初の2つ」だけにする（読みやすさ優先）
     """
     t = raw.replace("　", " ").strip()
-
-    # 天気語の表記ゆれを吸収（曇→くもり）
     t = t.replace("曇り", "くもり").replace("曇", "くもり")
 
     keywords = ["晴れ", "くもり", "雨", "雪"]
-    found = []
-
-    # 出現順に拾う
-    for k in keywords:
-        pass  # 位置で拾うため後でまとめて処理
-
     positions = []
     for k in keywords:
         idx = t.find(k)
@@ -68,51 +54,25 @@ def normalize_weather_text(raw: str) -> str:
             positions.append((idx, k))
     positions.sort()
 
+    found = []
     for _, k in positions:
         if not found or found[-1] != k:
             found.append(k)
 
     if not found:
         return raw.strip()
-
-    # 最初の2つだけに絞る
     if len(found) == 1:
         return found[0]
-    else:
-        return f"{found[0]}のち{found[1]}"
+    return f"{found[0]}のち{found[1]}"
 
-def max_pop_for_today(ts_pop: dict, area_name: str, now_jst: datetime) -> int | None:
+
+def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) -> dict[str, int | None]:
     """
-    降水確率 timeSeries(ts_pop) から「今日(JST)の分だけ」を抽出して最大値を返す
-    """
-    area_pop = pick_area(ts_pop["areas"], area_name)
-    pops = area_pop.get("pops", [])
-    time_defines = ts_pop.get("timeDefines", [])
-
-    today = now_jst.date()
-    vals = []
-
-    for tdef, p in zip(time_defines, pops):
-        # p が数字でない（""など）場合はスキップ
-        if not (isinstance(p, str) and p.isdigit()):
-            continue
-
-        # 例: "2026-02-20T06:00:00+09:00" を datetime に
-        try:
-            dt = datetime.fromisoformat(tdef)
-        except Exception:
-            continue
-
-        # JSTで“今日”に属するものだけ採用
-        if dt.date() == today:
-            vals.append(int(p))
-
-    return max(vals) if vals else None
-
-def pops_ranges_for_today(ts_pop: dict, area_name: str, now_jst: datetime) -> list[tuple[str, int]]:
-    """
-    timeSeries[1] の (timeDefines, pops) から「今日(JST)の区間」だけを抽出し、
-    ('06-12', 30) のような区間レンジで返す
+    気象庁の降水確率 timeSeries[1] から「今日」の分だけを集め、
+    00-06 / 06-12 / 12-18 / 18-24 の4区間に当てはめる。
+    取れない区間は None のまま。
+    
+    ※ timeSeries[1] は発表時刻によって要素数・含む時間帯が変わるため、欠ける区間があり得る。
     """
     area_pop = pick_area(ts_pop["areas"], area_name)
     pops = area_pop.get("pops", [])
@@ -120,7 +80,14 @@ def pops_ranges_for_today(ts_pop: dict, area_name: str, now_jst: datetime) -> li
 
     today = now_jst.date()
 
-    # timeDefinesをdatetimeに変換（+09:00付きならfromisoformatでOK）
+    buckets: dict[str, int | None] = {
+        "00-06": None,
+        "06-12": None,
+        "12-18": None,
+        "18-24": None,
+    }
+
+    # timeDefinesをdatetimeに
     tds = []
     for tdef in time_defines:
         try:
@@ -128,9 +95,7 @@ def pops_ranges_for_today(ts_pop: dict, area_name: str, now_jst: datetime) -> li
         except Exception:
             tds.append(None)
 
-    results: list[tuple[str, int]] = []
-
-    # 区間は「tds[i] ～ tds[i+1]」、pops[i] が対応（要素数の都合で -1）
+    # 区間: tds[i]～tds[i+1] に pops[i]
     for i in range(min(len(pops), len(tds) - 1)):
         start = tds[i]
         end = tds[i + 1]
@@ -141,37 +106,47 @@ def pops_ranges_for_today(ts_pop: dict, area_name: str, now_jst: datetime) -> li
         if not (isinstance(p, str) and p.isdigit()):
             continue
 
-        # 今日の区間だけ（startの日付が今日）
+        # 今日の区間だけ
         if start.date() != today:
             continue
 
-        start_h = start.strftime("%H")
-        end_h = end.strftime("%H")
+        sh = start.strftime("%H")
+        eh = end.strftime("%H")
+        if eh == "00":
+            eh = "24"
 
-        # 00時は 24 と表記すると分かりやすい（18-24など）
-        if end_h == "00":
-            end_h = "24"
+        key = f"{sh}-{eh}"
+        if key in buckets:
+            buckets[key] = int(p)
 
-        results.append((f"{start_h}-{end_h}", int(p)))
+    return buckets
 
-    return results
 
-def format_pop_ranges(ranges: list[tuple[str, int]]) -> tuple[str | None, int | None]:
+def format_buckets_line(buckets: dict[str, int | None]) -> tuple[str, int | None]:
     """
-    [('06-12',30), ('12-18',10)] → '06-12 30% / 12-18 10%' と最大値
+    4区間を必ず並べて表示。
+    例: '00-06 --% / 06-12 20% / 12-18 10% / 18-24 0%'（最大20%）
     """
-    if not ranges:
-        return None, None
-    text = " / ".join([f"{r} {p}%" for r, p in ranges])
-    max_pop = max(p for _, p in ranges)
-    return text, max_pop
-    
+    order = ["00-06", "06-12", "12-18", "18-24"]
+    parts = []
+    vals = []
+    for k in order:
+        v = buckets.get(k)
+        if v is None:
+            parts.append(f"{k} --%")
+        else:
+            parts.append(f"{k} {v}%")
+            vals.append(v)
+    max_pop = max(vals) if vals else None
+    return " / ".join(parts), max_pop
+
+
 def build_message(jma_json: list) -> str:
     data0 = jma_json[0]
     publishing_office = data0.get("publishingOffice", "気象庁")
     report_dt = data0.get("reportDatetime", "")
 
-    # 今日の日付（JSTで固定）※先に作る（pop計算でも使う）
+    # JST固定
     now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
 
     # 今日の天気（文章）
@@ -182,19 +157,19 @@ def build_message(jma_json: list) -> str:
     main_weather = simple_weather.split("のち")[0]
     emoji = weather_to_emoji(main_weather)
 
-    # 降水確率（今日の区間ごとに表示）
+    # 今日の降水（4区間固定で表示）
     ts_pop = data0["timeSeries"][1]
-    pop_ranges = pops_ranges_for_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
-    pop_line, pop_max = format_pop_ranges(pop_ranges)
+    buckets = pops_fixed_buckets_today(ts_pop, TARGET_FORECAST_AREA_NAME, now_jst)
+    pop_line, pop_max = format_buckets_line(buckets)
 
-    # 気温（temps: 最低/最高が入ることが多い）
+    # 気温
     ts_temp = data0["timeSeries"][2]
     area_temp = pick_area(ts_temp["areas"], TARGET_TEMP_AREA_NAME)
     temps = area_temp.get("temps", [])
     temp_min = temps[0] if len(temps) >= 1 else None
     temp_max = temps[1] if len(temps) >= 2 else None
 
-    # 日付文字列
+    # 日付文字列（JST）
     date_str = now_jst.strftime("%-m/%-d(%a)")
     dow_map = {"Mon": "月", "Tue": "火", "Wed": "水", "Thu": "木", "Fri": "金", "Sat": "土", "Sun": "日"}
     if "(" in date_str and ")" in date_str:
@@ -216,8 +191,10 @@ def build_message(jma_json: list) -> str:
     if temp_min is not None and temp_max is not None:
         lines.append(f"気温：{temp_min}℃ / {temp_max}℃")
 
-    # ✅ ここが「いつ降るの？」に答える部分
-    if pop_line is not None:
+    # 今日の降水（必ず4区間）
+    if pop_max is None:
+        lines.append(f"降水：{pop_line}")
+    else:
         lines.append(f"降水：{pop_line}（最大{pop_max}%）")
 
     lines.append("")
@@ -225,12 +202,11 @@ def build_message(jma_json: list) -> str:
 
     return "\n".join(lines)
 
+
 def send_line_to_group(message: str):
-    """
-    LINEグループへPush送信（Messaging API）
-    """
+    """LINEグループへPush送信"""
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_GROUP_ID:
-        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN と LINE_GROUP_ID を GitHub Secrets に設定してください。")
+        raise RuntimeError("LINE_CHANNEL_ACCESS_TOKEN と LINE_GROUP_ID を設定してください。")
 
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
@@ -238,17 +214,19 @@ def send_line_to_group(message: str):
         "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
     }
     payload = {
-        "to": LINE_GROUP_ID,  # ★ここがグループID
+        "to": LINE_GROUP_ID,
         "messages": [{"type": "text", "text": message}],
     }
 
     r = requests.post(url, headers=headers, json=payload, timeout=10)
     r.raise_for_status()
 
+
 def main():
     jma = fetch_jma_forecast(JMA_OFFICE_CODE)
     msg = build_message(jma)
     send_line_to_group(msg)
+
 
 if __name__ == "__main__":
     main()
