@@ -1,31 +1,30 @@
-import os
-import requests
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import os                        # 環境変数を読む
+import requests                  # Webにアクセスしてデータを送受信する
+from datetime import datetime    # 日付や時刻を扱う
+from zoneinfo import ZoneInfo    # タイムゾーンを扱う（UTC⇒JSTにする）
 
-# ====== 設定（環境変数で上書き可能）======
+# 設定
 JMA_OFFICE_CODE = os.getenv("JMA_OFFICE_CODE", "400000")  # 福岡県
 TARGET_FORECAST_AREA_NAME = os.getenv("TARGET_FORECAST_AREA_NAME", "福岡地方")
 TARGET_TEMP_AREA_NAME = os.getenv("TARGET_TEMP_AREA_NAME", "福岡")
-
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")  # Cから始まるgroupId
+LINE_GROUP_ID = os.getenv("LINE_GROUP_ID")  # LINEのgroupId
 
-
+# 気象庁JSONを取りに行く
 def fetch_jma_forecast(office_code: str) -> list:
     url = f"https://www.jma.go.jp/bosai/forecast/data/forecast/{office_code}.json"
     r = requests.get(url, timeout=10)
     r.raise_for_status()
     return r.json()
 
-
+# 取ってきた気象庁JSONの中から「福岡地方」を探す
 def pick_area(areas: list, name: str) -> dict:
     for a in areas:
         if a.get("area", {}).get("name") == name:
             return a
     raise ValueError(f"指定した地域名 '{name}' が見つかりませんでした。")
 
-
+# 天気を絵文字に変換する
 def weather_to_emoji(main_weather: str) -> str:
     """メイン天気（晴れ/くもり/雨/雪）から絵文字を決める"""
     if "晴れ" in main_weather:
@@ -38,6 +37,7 @@ def weather_to_emoji(main_weather: str) -> str:
         return "❄️"
     return "🌤️"
 
+# 天気の絵文字を〇/△形式で表現する
 def weather_to_emoji_combo(simple_weather: str) -> str:
     """
     '晴れのちくもり' のような表現を ☀️/☁️ のように表示する
@@ -52,9 +52,10 @@ def weather_to_emoji_combo(simple_weather: str) -> str:
             unique.append(e)
     return "/".join(unique) if unique else "🌤️"
 
+# 天気文を〇〇のち△△に成形する
 def normalize_weather_text(raw: str) -> str:
     """
-    気象庁の天気文を「〇〇のち〇〇」形式へ寄せる（シンプル版）
+    気象庁の天気文を「〇〇のち△△」形式へ寄せる
     """
     t = raw.replace("　", " ").strip()
     t = t.replace("曇り", "くもり").replace("曇", "くもり")
@@ -78,11 +79,11 @@ def normalize_weather_text(raw: str) -> str:
         return found[0]
     return f"{found[0]}のち{found[1]}"
 
-
+# 今日の降水確率を時間帯ごとで区切る
 def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) -> dict[str, int | None]:
     """
     気象庁の降水確率 timeSeries[1] から「今日」の分だけを集め、
-    00-06 / 06-12 / 12-18 / 18-24 の4区間に当てはめる。
+    00:00-06:00 / 06:00-12:00 / 12:00-18:00 / 18:00-24:00 の4区間に当てはめる。
     取れない区間は None のまま。
     
     ※ timeSeries[1] は発表時刻によって要素数・含む時間帯が変わるため、欠ける区間があり得る。
@@ -94,10 +95,10 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
     today = now_jst.date()
 
     buckets: dict[str, int | None] = {
-        "00-06": None,
-        "06-12": None,
-        "12-18": None,
-        "18-24": None,
+        "00:00-06:00": None,
+        "06:00-12:00": None,
+        "12:00-18:00": None,
+        "18:00-24:00": None,
     }
 
     # timeDefinesをdatetimeに
@@ -125,8 +126,8 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
 
         sh = start.strftime("%H")
         eh = end.strftime("%H")
-        if eh == "00":
-            eh = "24"
+        if eh == "00:00":
+            eh = "24:00"
 
         key = f"{sh}-{eh}"
         if key in buckets:
@@ -134,29 +135,29 @@ def pops_fixed_buckets_today(ts_pop: dict, area_name: str, now_jst: datetime) ->
 
     return buckets
 
-
+# 降水確率の表示ブロックをつくる
 def format_buckets_block_filtered(
     buckets: dict[str, int | None],
     show_past: bool = False
 ) -> tuple[str, int | None]:
     """
     降水ブロックを作る（朝6:30想定で過去区間を出さない）
-    - show_past=False: 00-06を表示しない（6:30運用向け）
-    - show_past=True : 00-06も表示する（必要なら）
+    - show_past=False: 00:00-06:00を表示しない（6:30運用向け）
+    - show_past=True : 00:00-06:00も表示する（必要なら）
     """
     # 4区間の定義
-    all_order = ["00-06", "06-12", "12-18", "18-24"]
+    all_order = ["00:00-06:00", "06:00-12:00", "12:00-18:00", "18:00-24:00"]
 
-    # 朝6:30運用：過去区間を出さない → 00-06は除外
+    # 朝6:30運用：過去区間を出さない → 00:00-06:00は除外
     # （将来、実行時刻が変わっても柔軟にしたいなら now_jst.hour で分岐可能）
-    order = all_order if show_past else ["06-12", "12-18", "18-24"]
+    order = all_order if show_past else ["06:00-12:00", "12:00-18:00", "18:00-24:00"]
 
     # 最大値は「表示対象の区間」だけで計算
     vals = [buckets.get(k) for k in order if isinstance(buckets.get(k), int)]
     max_pop = max(vals) if vals else None
 
-    header = f"降水：最大{max_pop}%" if max_pop is not None else "降水：最大--%"
-    sep = "---------------"
+    header = f"降水確率：最大{max_pop}%" if max_pop is not None else "降水確率：最大--%"
+    sep = "////////////////////"
 
     lines = [header, sep]
     for k in order:
@@ -166,14 +167,13 @@ def format_buckets_block_filtered(
 
     return "\n".join(lines), max_pop
 
-
+# 通知文全体をつくる
 def build_message(jma_json: list) -> str:
+    # 基本情報を取り出す
     data0 = jma_json[0]
     publishing_office = data0.get("publishingOffice", "気象庁")
     report_dt = data0.get("reportDatetime", "")
-
-    # JST固定
-    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
+    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))    # JST固定
 
     # 今日の天気（文章）
     ts_weather = data0["timeSeries"][0]
@@ -217,7 +217,7 @@ def build_message(jma_json: list) -> str:
     if temp_min is not None and temp_max is not None:
         lines.append(f"気温：{temp_min}℃ / {temp_max}℃")
 
-    # ★希望形式の降水ブロック（改行込み）
+    # 観測元
     lines.append(pop_block)
 
     lines.append("")
@@ -225,7 +225,7 @@ def build_message(jma_json: list) -> str:
 
     return "\n".join(lines)
 
-
+# LINEに送る
 def send_line_to_group(message: str):
     """LINEグループへPush送信"""
     if not LINE_CHANNEL_ACCESS_TOKEN or not LINE_GROUP_ID:
@@ -244,11 +244,11 @@ def send_line_to_group(message: str):
     r = requests.post(url, headers=headers, json=payload, timeout=10)
     r.raise_for_status()
 
-
+# main処理
 def main():
-    jma = fetch_jma_forecast(JMA_OFFICE_CODE)
-    msg = build_message(jma)
-    send_line_to_group(msg)
+    jma = fetch_jma_forecast(JMA_OFFICE_CODE)    # 天気を取る
+    msg = build_message(jma)                     # メッセージをつくる
+    send_line_to_group(msg)                      # LINEに送る
 
 
 if __name__ == "__main__":
