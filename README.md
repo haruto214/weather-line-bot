@@ -3,8 +3,6 @@
 毎朝決まった時刻に、**福岡市（福岡地方）の天気予報**を **LINEグループ**へ自動通知するPythonスクリプトです。  
 GitHub Actions のスケジュール実行で、PCを起動しっぱなしにする必要がありません。
 
----
-
 ## 特徴
 
 - 福岡市（福岡地方）の **今日の天気**を通知
@@ -15,8 +13,6 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
   - 「最大%」＋「各時間帯」＋「区切り線」で見やすく表示
 - GitHub Actions の定期実行で毎日自動送信（手動実行も可能）
 
----
-
 ## 仕組み（概要）
 
 1. 気象庁の天気予報JSONを取得（例：福岡県 `400000`）
@@ -25,16 +21,12 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 4. LINE Messaging API の Push でLINEグループに送信
 5. GitHub Actions の schedule で毎日実行（cron は UTC 指定）
 
----
-
 ## 必要なもの
 
 - GitHubアカウント（GitHub Actions を使うため）
 - LINE Developers の Messaging API チャネル
   - Channel access token（長期）
   - groupId（Cから始まるグループID）
-
----
 
 ## セットアップ
 
@@ -48,8 +40,6 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
         └── weather.yml
 ```
 
----
-
 ### 2) GitHub Secrets を設定
 
 GitHub リポジトリの  
@@ -60,8 +50,6 @@ GitHub リポジトリの
 - `LINE_GROUP_ID`：送信先のグループID（Cから始まる）
 
 ※機密情報なので、コードに直書きしないでください。
-
----
 
 ### 3) GitHub Actions（workflow）設定
 
@@ -104,16 +92,12 @@ jobs:
 
 ```
 
----
-
 ##  動作確認（手動実行）
 
 1) GitHub の Actions タブを開く  
 2) ワークフローを選択  
 3) Run workflow を押す  
 4) LINEグループに通知が届けばOK  
-
----
 
 ##  環境変数
 
@@ -122,8 +106,6 @@ jobs:
 ・JMA_OFFICE_CODE（デフォルト：400000）  
 ・TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
 ・TARGET_TEMP_AREA_NAME（デフォルト：福岡）  
-
----
 
 ##  注意点
 
