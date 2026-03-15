@@ -116,9 +116,9 @@ jobs:
 
 スクリプトは以下の環境変数で挙動を変更できます。
 
-JMA_OFFICE_CODE（デフォルト：400000）  
-TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
-TARGET_TEMP_AREA_NAME（デフォルト：福岡）  
+・JMA_OFFICE_CODE（デフォルト：400000）  
+・TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
+・TARGET_TEMP_AREA_NAME（デフォルト：福岡）  
 
 ---
 
