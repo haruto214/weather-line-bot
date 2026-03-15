@@ -34,30 +34,27 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 これらの要件に対して、**GitHub Actions × 気象庁JSON × LINE Messaging API** の組み合わせが、実装・運用コスト・学習コストのバランスが良かったため採用しました。
 
 ### 1) 実行基盤：GitHub Actions を選んだ理由
-- **サーバー不要で、定期実行（schedule/cron）ができる**ため、PCを付けっぱなしにせず自動実行できます。
-- `workflow_dispatch` を併用すると **手動実行もでき、動作確認がしやすい**ため、初心者でも運用が安定します。
-- `schedule.cron` は **UTC指定**なので、JSTで動かしたい場合は時差（UTC+9）を考慮して設定します。
-  - 例：JST 06:30 に動かしたい → UTC 21:30（前日）なので `30 21 * * *` を設定します。
+- **サーバー不要で、定期実行（schedule/cron）ができる**ため、PCを付けっぱなしにせず自動実行できる。
+- `workflow_dispatch` を併用すると **手動実行もでき、動作確認がしやすい**ため、初心者でも運用が安定する。
+- `schedule.cron` は **UTC指定**なので、JSTで動かしたい場合は時差（UTC+9）を考慮して設定する。
+  - 例：JST 06:30 に動かしたい → UTC 21:30（前日）なので `30 21 * * *` を設定する。
 
 ### 2) 天気データ：気象庁JSON を選んだ理由
-- 気象庁サイトで利用されている **天気予報データを JSON で取得でき、地域コード（例：福岡県 400000）で指定できる**ため、実装がシンプルです。
-- 取得URLが明確（`https://www.jma.go.jp/bosai/forecast/data/forecast/{code}.json`）で、HTTP GET で完結するため、Python初心者でも扱いやすいです。
-- `timeSeries` に **天気文（weathers）** と **降水確率（pops + timeDefines）** のような情報がまとまっており、通知メッセージを組み立てやすいです。
+- 気象庁サイトで利用されている **天気予報データを JSON で取得でき、地域コード（例：福岡県 400000）で指定できる**ため、実装がシンプル。
+- 取得URLが明確（`https://www.jma.go.jp/bosai/forecast/data/forecast/{code}.json`）で、HTTP GET で完結するため、Python初心者でも扱いやすい。
+- `timeSeries` に **天気文（weathers）** と **降水確率（pops + timeDefines）** のような情報がまとまっており、通知メッセージを組み立てやすい。
 
 ### 3) 通知先：LINE Messaging API（Push）を選んだ理由
-- LINEの通知を自動化するために、**Botから任意のタイミングで送れる Push メッセージ**を利用しました。
-- 送信は `POST /v2/bot/message/push` で行え、宛先（to）に **groupId** を指定することでLINEグループへ通知できます。
-- GitHub Actions から実行する場合、トークン（Channel access token）や groupId は **GitHub Secrets で管理**することで、コードに直書きせず安全に運用できます。
+- LINEの通知を自動化するために、**Botから任意のタイミングで送れる Push メッセージ**を利用した。
+- 送信は `POST /v2/bot/message/push` で行え、宛先（to）に **groupId** を指定することでLINEグループへ通知できる。
+- GitHub Actions から実行する場合、トークン（Channel access token）や groupId は **GitHub Secrets で管理**することで、コードに直書きせず安全に運用できる。
 
-### 4) この構成のメリット・デメリット
-**メリット**
-- サーバー不要で運用でき、実装も「取得→整形→送信」の3ステップで分かりやすい。
-- 失敗時は GitHub Actions のログで原因追跡でき、手動実行（workflow_dispatch）で再実行もできる。
+### 4) この構成のデメリット
 
 **デメリット**
-- GitHub Actions の schedule は **UTC基準**であり、JST変換が必要です。
-- schedule 実行は混雑状況で遅延する可能性があるため、通知時刻に余裕を持たせる（例：7:00に通知が欲しい場合は6:30実行）などの工夫が必要です。
-- 気象庁JSONはWebサイト内部データであり、将来的な仕様変更の可能性があります（その場合はパース処理の調整が必要です）。
+- GitHub Actions の schedule は **UTC基準**であり、JST変換が必要。
+- schedule 実行は混雑状況で遅延する可能性があるため、通知時刻に余裕を持たせる（例：7:00に通知が欲しい場合は6:30実行）などの工夫が必要。
+- 気象庁JSONはWebサイト内部データであり、将来的な仕様変更の可能性がある（その場合はパース処理の調整が必要）。
 
 ## 必要なもの
 
@@ -82,19 +79,19 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 
 GitHub リポジトリの  
 `Settings -> Secrets and variables -> Actions -> New repository secret`  
-で以下を登録します。
+で以下を登録する。
 
 - `LINE_CHANNEL_ACCESS_TOKEN`：チャネルアクセストークン（長期）
 - `LINE_GROUP_ID`：送信先のグループID（Cから始まる）
 
-※機密情報なので、コードに直書きしないでください。
+※機密情報なので、コードに直書きしないこと。
 
 ### 3) GitHub Actions（workflow）設定
 
 `.github/workflows/weather.yml` 例：
 
-> GitHub Actions の cron は UTC 指定です。  
-> 日本時間 6:30 は UTC 21:30（前日）なので `30 21 * * *` を指定します。
+> GitHub Actions の cron は UTC 指定。  
+> 日本時間 6:30 は UTC 21:30（前日）なので `30 21 * * *` を指定する。
 
 ```yaml
 name: Daily Weather to LINE (Group)
@@ -139,7 +136,7 @@ jobs:
 
 ##  環境変数
 
-スクリプトは以下の環境変数で挙動を変更できます。
+スクリプトは以下の環境変数で挙動を変更できる。
 
 - JMA_OFFICE_CODE（デフォルト：400000）  
 - TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
