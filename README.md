@@ -105,10 +105,10 @@ jobs:
 
 ##  動作確認（手動実行）
 
-### 1) GitHub の Actions タブを開く
-### 2) ワークフローを選択
-### 3) Run workflow を押す
-### 4) LINEグループに通知が届けばOK
+1) GitHub の Actions タブを開く  
+2) ワークフローを選択  
+3) Run workflow を押す  
+4) LINEグループに通知が届けばOK  
 
 ---
 
