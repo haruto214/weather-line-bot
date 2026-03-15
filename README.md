@@ -39,11 +39,14 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 ## セットアップ
 
 ### 1) リポジトリ構成
+
+```text
 .
-├── main.py  
-└── .github/  
-      └── workflows/  
-           └── weather.yml  
+├── main.py
+└── .github/
+    └── workflows/
+        └── weather.yml
+```
 
 ---
 
