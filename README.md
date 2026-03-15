@@ -130,5 +130,3 @@ jobs:
 ・気象庁のJSONはWebサイト内部で使われているデータであり、仕様変更の可能性があります。  
 ・GitHub Actions の schedule 実行は、混雑状況により数分程度遅延することがあります。  
 ・LINE送信は Messaging API の Push を利用します。  
-
----
