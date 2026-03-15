@@ -157,7 +157,7 @@ def format_buckets_block_filtered(
     max_pop = max(vals) if vals else None
 
     header = f"降水確率：最大{max_pop}%" if max_pop is not None else "降水確率：最大--%"
-    sep = "------------------------------------------"
+    sep = "------------------------"
 
     lines = [header, sep]
     for k in order:
