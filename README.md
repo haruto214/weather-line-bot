@@ -10,7 +10,7 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 
 1. 気象庁の天気予報JSONを取得（例：福岡県 `400000`）
 2. JSONから「福岡地方」の天気文（weathers）と降水確率（pops）を抽出
-3. 読みやすい形式に整形（天気文の要約、絵文字、降水ブロック）
+3. 読みやすい形式に整形（天気文の要約、絵文字、時間帯ごとの降水確率）
 4. LINE Messaging API の Push でLINEグループに送信
 5. GitHub Actions の schedule で毎日実行（cron は UTC 指定）
 
