@@ -21,6 +21,41 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 4. LINE Messaging API の Push でLINEグループに送信
 5. GitHub Actions の schedule で毎日実行（cron は UTC 指定）
 
+## なぜこの構成にしたのか（設計の理由）
+
+このアプリは以下の要件に従って設計しています。  
+・完全無料  
+・PCを起動しっぱなしにしなくてよい  
+・毎日決まった時刻に、LINEグループへ天気を自動通知する  
+
+これらの要件に対して、**GitHub Actions × 気象庁JSON × LINE Messaging API** の組み合わせが、実装・運用コスト・学習コストのバランスが良かったため採用しました。
+
+### 1) 実行基盤：GitHub Actions を選んだ理由
+- **サーバー不要で、定期実行（schedule/cron）ができる**ため、PCを付けっぱなしにせず自動実行できます。
+- `workflow_dispatch` を併用すると **手動実行もでき、動作確認がしやすい**ため、初心者でも運用が安定します。
+- `schedule.cron` は **UTC指定**なので、JSTで動かしたい場合は時差（UTC+9）を考慮して設定します。
+  - 例：JST 06:30 に動かしたい → UTC 21:30（前日）なので `30 21 * * *` を設定します。
+
+### 2) 天気データ：気象庁JSON を選んだ理由
+- 気象庁サイトで利用されている **天気予報データを JSON で取得でき、地域コード（例：福岡県 400000）で指定できる**ため、実装がシンプルです。
+- 取得URLが明確（`https://www.jma.go.jp/bosai/forecast/data/forecast/{code}.json`）で、HTTP GET で完結するため、Python初心者でも扱いやすいです。
+- `timeSeries` に **天気文（weathers）** と **降水確率（pops + timeDefines）** のような情報がまとまっており、通知メッセージを組み立てやすいです。
+
+### 3) 通知先：LINE Messaging API（Push）を選んだ理由
+- LINEの通知を自動化するために、**Botから任意のタイミングで送れる Push メッセージ**を利用しました。
+- 送信は `POST /v2/bot/message/push` で行え、宛先（to）に **groupId** を指定することでLINEグループへ通知できます。
+- GitHub Actions から実行する場合、トークン（Channel access token）や groupId は **GitHub Secrets で管理**することで、コードに直書きせず安全に運用できます。
+
+### 4) この構成のメリット・デメリット
+**メリット**
+- サーバー不要で運用でき、実装も「取得→整形→送信」の3ステップで分かりやすい。
+- 失敗時は GitHub Actions のログで原因追跡でき、手動実行（workflow_dispatch）で再実行もできる。
+
+**デメリット**
+- GitHub Actions の schedule は **UTC基準**であり、JST変換が必要です。
+- schedule 実行は混雑状況で遅延する可能性があるため、通知時刻に余裕を持たせる（例：7:00に通知が欲しい場合は6:30実行）などの工夫が必要です。
+- 気象庁JSONはWebサイト内部データであり、将来的な仕様変更の可能性があります（その場合はパース処理の調整が必要です）。
+
 ## 必要なもの
 
 - GitHubアカウント（GitHub Actions を使うため）
@@ -105,10 +140,4 @@ jobs:
 
 ・JMA_OFFICE_CODE（デフォルト：400000）  
 ・TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
-・TARGET_TEMP_AREA_NAME（デフォルト：福岡）  
-
-##  注意点
-
-・気象庁のJSONはWebサイト内部で使われているデータであり、仕様変更の可能性があります。  
-・GitHub Actions の schedule 実行は、混雑状況により数分程度遅延することがあります。  
-・LINE送信は Messaging API の Push を利用します。  
+・TARGET_TEMP_AREA_NAME（デフォルト：福岡）   
