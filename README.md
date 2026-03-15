@@ -40,10 +40,10 @@ GitHub Actions のスケジュール実行で、PCを起動しっぱなしにす
 
 ### 1) リポジトリ構成
 .
-├── main.py
-└── .github/
-      └── workflows/
-           └── weather.yml
+├── main.py  
+└── .github/  
+      └── workflows/  
+           └── weather.yml  
 
 ---
 
@@ -116,16 +116,16 @@ jobs:
 
 スクリプトは以下の環境変数で挙動を変更できます。
 
-###  JMA_OFFICE_CODE（デフォルト：400000）
-###  TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）
-###  TARGET_TEMP_AREA_NAME（デフォルト：福岡）
+JMA_OFFICE_CODE（デフォルト：400000）  
+TARGET_FORECAST_AREA_NAME（デフォルト：福岡地方）  
+TARGET_TEMP_AREA_NAME（デフォルト：福岡）  
 
 ---
 
 ##　注意点
 
-・気象庁のJSONはWebサイト内部で使われているデータであり、仕様変更の可能性があります。
-・GitHub Actions の schedule 実行は、混雑状況により数分程度遅延することがあります。
-・LINE送信は Messaging API の Push を利用します。
+・気象庁のJSONはWebサイト内部で使われているデータであり、仕様変更の可能性があります。  
+・GitHub Actions の schedule 実行は、混雑状況により数分程度遅延することがあります。  
+・LINE送信は Messaging API の Push を利用します。  
 
 ---
